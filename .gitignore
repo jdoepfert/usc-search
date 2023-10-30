@@ -134,11 +134,5 @@ debug_html
 **/npm-debug.log
 **/package-lock.json
 
-frontend/build
-output_files
 
-# development report data
-development_server/data/test_output/*
-development_server/data/custom/*
-!development_server/data/custom/example.json
 
