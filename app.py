@@ -108,7 +108,7 @@ def render_map(df):
 
         folium.Marker(
             location=[row['latitude'], row['longitude']],
-            popup=f"<a href={row['link']}>{row['name']} target='blank'</a><br>{'/'.join(row['disciplines'])}<br><b>{row['min_plan']}",
+            popup=f"<a target='blank' href={row['link']}>{row['name']}</a><br>{'/'.join(row['disciplines'])}<br><b>{row['min_plan']}",
             icon=folium.Icon(icon=icon, color=color),
         ).add_to(m)
 
