@@ -17,7 +17,7 @@ def parse_list(x):
 
 
 def get_all_csv_paths(city_id):
-    return glob.glob(os.path.join(config.DATA_DIR, f'venues_*_city{city_id}*_maxpages*.csv'))
+    return glob.glob(os.path.join(config.DATA_DIR, f'venues_*_city{city_id}_maxpages*.csv'))
 
 
 def parse_info_from_csv_name(csv):
