@@ -1,7 +1,6 @@
 import json
 import os
 import requests
-import glob
 import logging
 
 import bs4 as bs
@@ -18,10 +17,32 @@ PLAN_CLASS = "smm-studio-snippet__studio-plan"
 ADDRESS_CLASS = "smm-studio-snippet__address"
 PLUS_CLASS = 'usc-studio-status-label plus-checkins label'
 LINK_CLASS = 'smm-studio-snippet__studio-link'
+CITY_FILTERS_CLASS = 'usc-studio-filters dashboard-title'
 
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level = logging.INFO)
+
+
+def download_cities():
+    headers = {'user-agent': config.USER_AGENT}
+    url = f"{config.BASE_LINK}/en/venues?city_id=1&plan_type=6"
+    logger.info(f"Downloading cities from {url}")
+    response = requests.get(url, headers=headers)
+    page_source = response.content
+    soup = bs.BeautifulSoup(page_source,'html.parser')
+    divs_filters = soup.find_all('div', class_='usc-studio-filters dashboard-title')
+    assert len(divs_filters) == 1
+    div_filter = divs_filters[0]
+    cities = {}
+    for country in div_filter.find_all('optgroup'):
+        country_name = country['label']
+        for city in country.find_all('option'):
+            city_name = city.text.strip()
+            cities[f"{city_name} - {country_name}"] = city['value']
+    with open(os.path.join(config.DATA_DIR, 'cities.json'), 'w') as fp:
+        json.dump(cities, fp)
+    return cities
 
 
 def download_venues_source(city_id):
@@ -120,7 +141,7 @@ def get_metadata_from_df(df, name):
 
 def add_venue_metadata(venues, city_id):
     logger.info("Adding metadata")
-    previous_venues = utils.load_previous_csv(city_id)
+    previous_venues, _ = utils.load_previous_csv(city_id)
     previous_venue_names = [] if previous_venues is None else previous_venues['name'].values
     new_venues = set(venues.name) - set(previous_venue_names)
     lost_venues = set(previous_venue_names) - set(venues.name)
@@ -149,7 +170,8 @@ def store_csv(df, date, city_id):
 
 def main():
     download_date = pd.Timestamp.today().date()
-    for city_id, city_name in config.CITY_IDS.items():
+    cities = download_cities()
+    for city_name, city_id in cities.items():
         logger.info(f"Starting to scrape city {city_name}...")
         venues_source = download_venues_source(city_id)
         venues = extract_venues(venues_source)
