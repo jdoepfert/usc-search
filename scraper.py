@@ -7,12 +7,8 @@ import logging
 import bs4 as bs
 import pandas as pd
 
+import config
 
-DATA_DIR = 'data'
-CITY_IDS = [1, 38, 95]  # Berlin, Mannheim, Heidelberg
-MAX_PAGES = 44  # You need to try this on the web page
-BASE_LINK = 'https://urbansportsclub.com/'
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36'
 
 VENUE_CLASS = "smm-studio-snippet b-studio-item"
 TITLE_CLASS = "smm-studio-snippet__title"
@@ -28,8 +24,8 @@ logging.basicConfig(level = logging.INFO)
 
 
 def download_venues_source(city_id):
-    headers = {'user-agent': USER_AGENT}
-    url = f"{BASE_LINK}/en/venues?city_id={city_id}&plan_type=6&page={MAX_PAGES}&previous-pages"
+    headers = {'user-agent': config.USER_AGENT}
+    url = f"{config.BASE_LINK}/en/venues?city_id={city_id}&plan_type=6&page={config.MAX_PAGES}&previous-pages"
     logger.info(f"Downloading venues from {url}")
     response = requests.get(url, headers=headers)
     page_source = response.content
@@ -83,7 +79,7 @@ def get_link(venue):
     links = venue.find_all('a', class_=LINK_CLASS)
     assert len(links) == 1
     a = links[0]
-    return BASE_LINK + a['href']
+    return config.BASE_LINK + a['href']
 
 
 def extract_venues(venues_source):
@@ -107,8 +103,8 @@ def extract_venues(venues_source):
     return df
 
 
-def get_all_csv_paths():
-    return glob.glob(os.path.join(DATA_DIR, 'venues_*_city*_maxpages*.csv'))
+def get_all_csv_paths(city_id):
+    return glob.glob(os.path.join(config.DATA_DIR, f'venues_*_city{city_id}*_maxpages*.csv'))
 
 
 def parse_info_from_csv_name(csv):
@@ -118,23 +114,30 @@ def parse_info_from_csv_name(csv):
     return date, maxpages
 
 
-def get_all_csvs_w_date():
+def get_all_csvs_w_date(city_id):
     csvs = []
-    for csv in get_all_csv_paths():
-        date, maxpages = parse_info_from_csv_name(csv)
-        csvs.append({'date': date, 'maxpages': maxpages, 'file': csv})
-    return pd.DataFrame(csvs).sort_values('date', ascending=False)
+    paths = get_all_csv_paths(city_id)
+    if paths is None or len(paths) == 0:
+        return None
+    else:
+        for p in paths:
+            date, maxpages = parse_info_from_csv_name(p)
+            csvs.append({'date': date, 'maxpages': maxpages, 'file': p})
+        return pd.DataFrame(csvs).sort_values('date', ascending=False)
 
 
-def load_previous_csv():
-    df = get_all_csvs_w_date()
-    path =  df.iloc[0].file  # 0 would be the current file, 1 is the previous file
-    logger.info(f"load previous csv: {path}")
-    return pd.read_csv(path)
+def load_previous_csv(city_id):
+    df = get_all_csvs_w_date(city_id)
+    if df is None:
+        return None
+    else:
+        path = df.iloc[0].file  # 0 would be the current file, 1 is the previous file
+        logger.info(f"load previous csv: {path}")
+        return pd.read_csv(path)
 
 
 def download_metadata(venue_link):
-    headers = {'user-agent': USER_AGENT}
+    headers = {'user-agent': config.USER_AGENT}
     page_source = requests.get(venue_link, headers=headers).content
     venue_soup = bs.BeautifulSoup(page_source, 'html.parser')
     script_section = venue_soup.find('script', type='application/ld+json')
@@ -147,16 +150,17 @@ def get_metadata_from_df(df, name):
     return json.loads(prev_metadata, strict=False)
 
 
-def add_venue_metadata(venues):
+def add_venue_metadata(venues, city_id):
     logger.info("Adding metadata")
-    previous_venues = load_previous_csv()
-    new_venues = set(venues.name) - set(previous_venues.name)
-    lost_venues = set(previous_venues.name) - set(venues.name)
+    previous_venues = load_previous_csv(city_id)
+    previous_venue_names = [] if previous_venues is None else previous_venues['name'].values
+    new_venues = set(venues.name) - set(previous_venue_names)
+    lost_venues = set(previous_venue_names) - set(venues.name)
     logger.info(f"I found {len(new_venues)} new venues, "
                 f"and I found that {len(lost_venues)} were dropped")
     metadata_list = []
     for i, row in venues.iterrows():
-        if row['name'] in previous_venues['name'].values:
+        if row['name'] in previous_venue_names:
             metadata = get_metadata_from_df(previous_venues, row['name'])
         else:
             logger.info(f"Downloading metadata {i+1}/{len(venues)}")
@@ -170,20 +174,20 @@ def add_venue_metadata(venues):
 
 
 def store_csv(df, date, city_id):
-    filename = f'venues_{date}_city{city_id}_maxpages{MAX_PAGES}.csv'
+    filename = f'venues_{date}_city{city_id}_maxpages{config.MAX_PAGES}.csv'
     logger.info(f"Storing into {filename}")
-    df.to_csv(os.path.join(DATA_DIR, filename), index=False)
+    df.to_csv(os.path.join(config.DATA_DIR, filename), index=False)
 
 
 def main():
     download_date = pd.Timestamp.today().date()
-    for city_id in CITY_IDS:
-        logger.info(f"Starting to scrape city {city_id}...")
+    for city_id, city_name in config.CITY_IDS.items():
+        logger.info(f"Starting to scrape city {city_name}...")
         venues_source = download_venues_source(city_id)
         venues = extract_venues(venues_source)
-        venues_w_metadata = add_venue_metadata(venues)
+        venues_w_metadata = add_venue_metadata(venues, city_id)
         store_csv(venues_w_metadata, download_date, city_id)
-        logger.info(f"Scraping city {city_id} finished!")
+        logger.info(f"Scraping city {city_name} finished!")
 
 
 if __name__ == '__main__':
