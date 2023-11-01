@@ -130,7 +130,7 @@ def download_metadata(venue_link):
     page_source = requests.get(venue_link, headers=headers).content
     venue_soup = bs.BeautifulSoup(page_source, 'html.parser')
     script_section = venue_soup.find('script', type='application/ld+json')
-    return json.loads(script_section.text, strict=False)
+    return json.loads(script_section.text.replace("\\", ""), strict=False)
 
 
 def get_metadata_from_df(df, name):
