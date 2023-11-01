@@ -1,3 +1,4 @@
+import json
 import os
 
 import streamlit as st
@@ -5,17 +6,13 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 
-from utils import load_previous_csv
-
-import config
-
+import utils
 
 PLANS = ('S', 'M', 'L')
-DISPLAY_COLUMNS = ['name', 'disciplines', 'min_plan', 'plus_options',
-                   'district', 'link']
+DISPLAY_COLUMNS = ['city_name', 'name', 'disciplines', 'min_plan',
+                   'plus_options', 'district', 'link']
 DEFAULT_DISCIPLINES = ['Sauna', 'Wellness', 'Massage', 'Spa']
 ZOOM_START = 11
-
 
 st.set_page_config(
     page_title="Urban Sports Club Search",
@@ -45,7 +42,7 @@ def verify_data(df):
 
 
 @st.cache_data
-def get_average_coords(df):
+def get_center_coords(df):
     return df.latitude.mean(), df.longitude.mean()
 
 
@@ -56,26 +53,29 @@ def get_disciplines(df):
     return sorted(list(set(flattened)))
 
 
-load_previous_csv = st.cache_data(load_previous_csv)
+load_previous_csv = st.cache_data(utils.load_previous_csv)
+combine_most_recent_csvs = st.cache_data(utils.combine_most_recent_csvs)
 
 
-def render_beginning_sidebar():
+def render_sidebar(disciplines, cities, date):
     st.sidebar.subheader("Urban Sports Club Search")
 
-    st.sidebar.write("City")
-    select_city = st.sidebar.selectbox("City",
-                                       config.CITIES, 0,
-                                       label_visibility="collapsed"
+    st.sidebar.write("Cities")
+    if st.sidebar.button("Select all", key='btn_cities'):
+        st.session_state.select_cities = cities
+
+    # Set defaults like this to avoid warning, see https://discuss.streamlit.io/t/why-do-default-values-cause-a-session-state-warning/15485/6
+    if "select_cities" not in st.session_state:
+        st.session_state.select_cities = ["Berlin - Deutschland"]
+    select_cities = st.sidebar.multiselect(
+        "City", cities,
+        key='select_cities', label_visibility="collapsed"
     )
-    return select_city
-
-
-def render_remaining_sidebar(disciplines, date):
     st.sidebar.markdown('###')
 
     st.sidebar.write("Minimum Plan")
     select_plan = st.sidebar.radio(
-        'Minimum Plan', list(PLANS) + ['All'], 4,
+        'Minimum Plan', list(PLANS) + ['All'], 3,
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -83,8 +83,8 @@ def render_remaining_sidebar(disciplines, date):
 
     st.sidebar.markdown('###')
 
-    st.sidebar.write("Discipline(s)")
-    if st.sidebar.button("Select all"):
+    st.sidebar.write("Disciplines")
+    if st.sidebar.button("Select all", key='btn_disciplines'):
         st.session_state.select_disciplines = disciplines
 
     # Set defaults like this to avoid warning, see https://discuss.streamlit.io/t/why-do-default-values-cause-a-session-state-warning/15485/6
@@ -96,7 +96,7 @@ def render_remaining_sidebar(disciplines, date):
         label_visibility="collapsed"
     )
     st.sidebar.caption(f"Last updated: {date}")
-    return select_disciplines, select_plus, select_plan
+    return select_cities, select_disciplines, select_plus, select_plan
 
 
 def render_map(df, location_coords):
@@ -131,8 +131,9 @@ def render_table(df):
     st.dataframe(df[DISPLAY_COLUMNS],
                  hide_index=True,
                  column_config={
+                     "city_name": st.column_config.Column("City", width="small"),
                      "disciplines": st.column_config.Column("Disciplines", width="medium"),
-                     "name":  st.column_config.Column("Studio Name", width="medium"),
+                     "name": st.column_config.Column("Studio Name", width="medium"),
                      "min_plan": "Min. Plan",
                      "plus_options": "Plus",
                      "district": "District",
@@ -140,26 +141,28 @@ def render_table(df):
                  }
                  )
 
-def filter_df(df, select_disciplines, select_plus, select_plan):
+
+def filter_df(df, select_disciplines, select_plus, select_plan, select_cities):
     disciplines_filter = df['disciplines'].apply(
         lambda x: not set(select_disciplines).isdisjoint(set(x))
     )
     plus_filter = df['plus_options'] if select_plus else True
     plan_filter = True if select_plan == 'All' else df['min_plan'] == select_plan
-    return df[plus_filter & disciplines_filter & plan_filter].sort_values(['name'])
+    cities_filter = df['city_name'].isin(select_cities)
+    return df[plus_filter & disciplines_filter & plan_filter & cities_filter].sort_values(['city_name', 'name'])
 
 
 def main():
-    select_city = render_beginning_sidebar()
-    df, date = load_previous_csv(config.CITIES[select_city])
-    city_coords = get_average_coords(df)
+    df, date = combine_most_recent_csvs()
     verify_data(df)
     disciplines = get_disciplines(df)
-    select_disciplines, select_plus, select_plan = \
-        render_remaining_sidebar(disciplines, date)
+    cities = sorted(list(set(df['city_name'])))
+    select_cities, select_disciplines, select_plus, select_plan = \
+        render_sidebar(disciplines, cities, date)
 
-    filtered_df = filter_df(df, select_disciplines, select_plus, select_plan)
-    render_map(filtered_df, city_coords)
+    filtered_df = filter_df(df, select_disciplines, select_plus, select_plan, select_cities)
+    center_coords = get_center_coords(filtered_df)
+    render_map(filtered_df, center_coords)
     render_table(filtered_df)
 
 

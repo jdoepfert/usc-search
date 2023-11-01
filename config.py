@@ -1,8 +1,8 @@
+import os
+
+
 DATA_DIR = 'data'
-CITY_IDS = {1: 'Berlin',
-            38: 'Mannheim',
-            95: 'Heidelberg'}
-CITIES = {v: k for k, v in CITY_IDS.items()}
+CITIES_JSON_PATH = os.path.join(DATA_DIR, 'cities.json')
 
 MAX_PAGES = 44  # You need to try this on the web page
 BASE_LINK = 'https://urbansportsclub.com/'

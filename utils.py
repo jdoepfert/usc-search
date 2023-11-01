@@ -1,6 +1,7 @@
 import glob
 import os
 import logging
+import json
 
 import pandas as pd
 
@@ -49,3 +50,23 @@ def load_previous_csv(city_id):
         logger.info(f"load previous csv: {path}")
         df = pd.read_csv(path, converters={"plans": parse_list, "disciplines": parse_list})
         return df, first_row.date
+
+
+def load_cities():
+    with open(os.path.join(config.CITIES_JSON_PATH), 'r') as fp:
+        cities = json.load(fp)
+    return cities
+
+
+def combine_most_recent_csvs():
+    cities = load_cities()
+    df_list = []
+    final_date = None
+    for name, id_ in cities.items():
+        df, date = load_previous_csv(id_)
+        if df is not None:
+            final_date = date
+            df['city_name'] = name
+            df_list.append(df)
+    combined_df = pd.concat(df_list)
+    return combined_df, final_date
