@@ -8,6 +8,7 @@ import bs4 as bs
 import pandas as pd
 
 import config
+import utils
 
 
 VENUE_CLASS = "smm-studio-snippet b-studio-item"
@@ -103,39 +104,6 @@ def extract_venues(venues_source):
     return df
 
 
-def get_all_csv_paths(city_id):
-    return glob.glob(os.path.join(config.DATA_DIR, f'venues_*_city{city_id}*_maxpages*.csv'))
-
-
-def parse_info_from_csv_name(csv):
-    _, date, city, maxpages = csv.split('_')
-    date = pd.to_datetime(date).date()
-    maxpages = int(maxpages.split('maxpages')[1].split('.')[0])
-    return date, maxpages
-
-
-def get_all_csvs_w_date(city_id):
-    csvs = []
-    paths = get_all_csv_paths(city_id)
-    if paths is None or len(paths) == 0:
-        return None
-    else:
-        for p in paths:
-            date, maxpages = parse_info_from_csv_name(p)
-            csvs.append({'date': date, 'maxpages': maxpages, 'file': p})
-        return pd.DataFrame(csvs).sort_values('date', ascending=False)
-
-
-def load_previous_csv(city_id):
-    df = get_all_csvs_w_date(city_id)
-    if df is None:
-        return None
-    else:
-        path = df.iloc[0].file  # 0 would be the current file, 1 is the previous file
-        logger.info(f"load previous csv: {path}")
-        return pd.read_csv(path)
-
-
 def download_metadata(venue_link):
     headers = {'user-agent': config.USER_AGENT}
     page_source = requests.get(venue_link, headers=headers).content
@@ -152,7 +120,7 @@ def get_metadata_from_df(df, name):
 
 def add_venue_metadata(venues, city_id):
     logger.info("Adding metadata")
-    previous_venues = load_previous_csv(city_id)
+    previous_venues = utils.load_previous_csv(city_id)
     previous_venue_names = [] if previous_venues is None else previous_venues['name'].values
     new_venues = set(venues.name) - set(previous_venue_names)
     lost_venues = set(previous_venue_names) - set(venues.name)

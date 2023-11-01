@@ -5,17 +5,15 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 
+from utils import load_previous_csv
 
-DATE = '2023-10-30'
-CITY_ID = 1  # Berlin
-MAX_PAGES = 44
-FILENAME = f'venues_{DATE}_city{CITY_ID}_maxpages{MAX_PAGES}.csv'
-FILEPATH = os.path.join('data', FILENAME)
+import config
+
+
 PLANS = ('S', 'M', 'L')
 DISPLAY_COLUMNS = ['name', 'disciplines', 'min_plan', 'plus_options',
                    'district', 'link']
 DEFAULT_DISCIPLINES = ['Sauna', 'Wellness', 'Massage', 'Spa']
-LOCATIONS = {"Berlin": [52.5200, 13.4050]}
 ZOOM_START = 11
 
 
@@ -33,40 +31,51 @@ def parse_list(x):
     return x.strip("[]").replace("'", '').split(", ")
 
 
-@st.cache_data  # 👈 Add the caching decorator
+@st.cache_data
 def load_data(filepath):
     df = pd.read_csv(filepath, converters={"plans": parse_list,
                                            "disciplines": parse_list})
     return df
 
 
-@st.cache_data  # 👈 Add the caching decorator
+@st.cache_data
 def verify_data(df):
-    assert set(df['min_plan'].unique()) == set(PLANS)
+    assert set(PLANS).issubset(set(df['min_plan'].unique()))
     return None
 
 
-@st.cache_data  # 👈 Add the caching decorator
+@st.cache_data
+def get_average_coords(df):
+    return df.latitude.mean(), df.longitude.mean()
+
+
+@st.cache_data
 def get_disciplines(df):
     flattened = [item for row in df['disciplines'].values
                  for item in row]
     return sorted(list(set(flattened)))
 
 
-def render_sidebar(disciplines):
-    # ----------------- SIDEBAR -----------------
+load_previous_csv = st.cache_data(load_previous_csv)
+
+
+def render_beginning_sidebar():
     st.sidebar.subheader("Urban Sports Club Search")
 
     st.sidebar.write("City")
-    st.sidebar.selectbox("City", ["Berlin"], 0,
-                         label_visibility="collapsed"
-                         )
+    select_city = st.sidebar.selectbox("City",
+                                       config.CITIES, 0,
+                                       label_visibility="collapsed"
+    )
+    return select_city
 
+
+def render_remaining_sidebar(disciplines, date):
     st.sidebar.markdown('###')
 
     st.sidebar.write("Minimum Plan")
     select_plan = st.sidebar.radio(
-        'Minimum Plan', list(PLANS) + ['All'], 1,
+        'Minimum Plan', list(PLANS) + ['All'], 4,
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -80,18 +89,17 @@ def render_sidebar(disciplines):
 
     # Set defaults like this to avoid warning, see https://discuss.streamlit.io/t/why-do-default-values-cause-a-session-state-warning/15485/6
     if "select_disciplines" not in st.session_state:
-        st.session_state.select_disciplines = DEFAULT_DISCIPLINES
-
+        st.session_state.select_disciplines = set(disciplines).intersection(DEFAULT_DISCIPLINES)
     select_disciplines = st.sidebar.multiselect(
         "Discipline(s)", disciplines,
         key='select_disciplines',
         label_visibility="collapsed"
     )
-    st.sidebar.caption(f"Last updated: {DATE}")
+    st.sidebar.caption(f"Last updated: {date}")
     return select_disciplines, select_plus, select_plan
 
 
-def render_map(df):
+def render_map(df, location_coords):
     m = folium.Map(tiles="OpenStreetMap")
     for i, row in df.iterrows():
         if row.plus_options:
@@ -114,7 +122,7 @@ def render_map(df):
 
     st_map = st_folium(m, height=400, use_container_width=True,
                        zoom=ZOOM_START,
-                       center=LOCATIONS['Berlin'],
+                       center=location_coords,
                        key='st_folium_map',
                        returned_objects=[])
 
@@ -142,12 +150,16 @@ def filter_df(df, select_disciplines, select_plus, select_plan):
 
 
 def main():
-    df = load_data(FILEPATH)
+    select_city = render_beginning_sidebar()
+    df, date = load_previous_csv(config.CITIES[select_city])
+    city_coords = get_average_coords(df)
     verify_data(df)
     disciplines = get_disciplines(df)
-    select_disciplines, select_plus, select_plan = render_sidebar(disciplines)
+    select_disciplines, select_plus, select_plan = \
+        render_remaining_sidebar(disciplines, date)
+
     filtered_df = filter_df(df, select_disciplines, select_plus, select_plan)
-    render_map(filtered_df)
+    render_map(filtered_df, city_coords)
     render_table(filtered_df)
 
 
