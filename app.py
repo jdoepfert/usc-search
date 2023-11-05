@@ -86,7 +86,7 @@ def render_sidebar(disciplines, cities, date):
     check_plans = []
     for i, p in enumerate(PLANS):
         with check_cols[i]:
-            check_plans.append(st.checkbox(p, p in PLANS[:2]))
+            check_plans.append(st.checkbox(p, p in PLANS[1:]))
 
     select_plus = st.sidebar.toggle('Plus Only')
 
@@ -122,6 +122,8 @@ def render_map(df, location_coords, zoom):
             color = 'lightblue'
         elif row.min_plan == 'L':
             color = 'lightred'
+        elif row.min_plan == 'XL':
+            color = 'darkred'
 
         folium.Marker(
             location=[row['latitude'], row['longitude']],
@@ -160,8 +162,9 @@ def filter_df(df, select_disciplines, select_plus, check_plans, select_cities):
     plan_filter = df['plans'].apply(
         lambda x: not set(selected_plans).isdisjoint(set(x))
     )
+    min_plan_filter = df['min_plan'].isin(selected_plans)
     cities_filter = df['city_name'].isin(select_cities)
-    return df[plus_filter & disciplines_filter & plan_filter & cities_filter].sort_values(['city_name', 'name'])
+    return df[plus_filter & disciplines_filter & plan_filter & cities_filter & min_plan_filter].sort_values(['city_name', 'name'])
 
 
 def main():
