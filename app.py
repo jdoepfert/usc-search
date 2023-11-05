@@ -8,8 +8,8 @@ from streamlit_folium import st_folium
 
 import utils
 
-PLANS = ('S', 'M', 'L')
-DISPLAY_COLUMNS = ['city_name', 'name', 'disciplines', 'min_plan',
+PLANS = ('S', 'M', 'L', 'XL')
+DISPLAY_COLUMNS = ['city_name', 'name', 'disciplines', 'plans',
                    'plus_options', 'district', 'link']
 DEFAULT_DISCIPLINES = ['Sauna', 'Wellness', 'Massage', 'Spa']
 ZOOM_START = 11
@@ -73,13 +73,14 @@ def render_sidebar(disciplines, cities, date):
     )
     st.sidebar.markdown('###')
 
-    st.sidebar.write("Minimum Plan")
-    select_plan = st.sidebar.radio(
-        'Minimum Plan', list(PLANS) + ['All'], 3,
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    select_plus = st.sidebar.checkbox('Plus Only')
+    st.sidebar.write("Plans")
+    check_cols = st.sidebar.columns(len(PLANS))
+    check_plans = []
+    for i, p in enumerate(PLANS):
+        with check_cols[i]:
+            check_plans.append(st.checkbox(p, p in PLANS[:2]))
+
+    select_plus = st.sidebar.toggle('Plus Only')
 
     st.sidebar.markdown('###')
 
@@ -96,7 +97,7 @@ def render_sidebar(disciplines, cities, date):
         label_visibility="collapsed"
     )
     st.sidebar.caption(f"Last updated: {date}")
-    return select_cities, select_disciplines, select_plus, select_plan
+    return select_cities, select_disciplines, select_plus, check_plans
 
 
 def render_map(df, location_coords):
@@ -116,7 +117,7 @@ def render_map(df, location_coords):
 
         folium.Marker(
             location=[row['latitude'], row['longitude']],
-            popup=f"<a target='blank' href={row['link']}>{row['name']}</a><br>{'/'.join(row['disciplines'])}<br><b>{row['min_plan']}",
+            popup=f"<a target='blank' href={row['link']}>{row['name']}</a><br>{'/'.join(row['disciplines'])}<br><b>{row['plans']}",
             icon=folium.Icon(icon=icon, color=color),
         ).add_to(m)
 
@@ -134,7 +135,7 @@ def render_table(df):
                      "city_name": st.column_config.Column("City", width="small"),
                      "disciplines": st.column_config.Column("Disciplines", width="medium"),
                      "name": st.column_config.Column("Studio Name", width="medium"),
-                     "min_plan": "Min. Plan",
+                     "plans": "Plans",
                      "plus_options": "Plus",
                      "district": "District",
                      'link': st.column_config.LinkColumn("Link", width='small')
@@ -142,12 +143,15 @@ def render_table(df):
                  )
 
 
-def filter_df(df, select_disciplines, select_plus, select_plan, select_cities):
+def filter_df(df, select_disciplines, select_plus, check_plans, select_cities):
     disciplines_filter = df['disciplines'].apply(
         lambda x: not set(select_disciplines).isdisjoint(set(x))
     )
     plus_filter = df['plus_options'] if select_plus else True
-    plan_filter = True if select_plan == 'All' else df['min_plan'] == select_plan
+    selected_plans = [plan for plan, c in zip(PLANS, check_plans) if c]
+    plan_filter = df['plans'].apply(
+        lambda x: not set(selected_plans).isdisjoint(set(x))
+    )
     cities_filter = df['city_name'].isin(select_cities)
     return df[plus_filter & disciplines_filter & plan_filter & cities_filter].sort_values(['city_name', 'name'])
 
@@ -157,10 +161,11 @@ def main():
     verify_data(df)
     disciplines = get_disciplines(df)
     cities = sorted(list(set(df['city_name'])))
-    select_cities, select_disciplines, select_plus, select_plan = \
+    select_cities, select_disciplines, select_plus, check_plans = \
         render_sidebar(disciplines, cities, date)
 
-    filtered_df = filter_df(df, select_disciplines, select_plus, select_plan, select_cities)
+    filtered_df = filter_df(df, select_disciplines, select_plus,
+                            check_plans, select_cities)
     center_coords = get_center_coords(filtered_df)
     render_map(filtered_df, center_coords)
     render_table(filtered_df)
