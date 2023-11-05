@@ -1,6 +1,3 @@
-import json
-import os
-
 import streamlit as st
 import pandas as pd
 import folium
@@ -8,11 +5,12 @@ from streamlit_folium import st_folium
 
 import utils
 
+
 PLANS = ('S', 'M', 'L', 'XL')
 DISPLAY_COLUMNS = ['city_name', 'name', 'disciplines', 'plans',
                    'plus_options', 'district', 'link']
 DEFAULT_DISCIPLINES = ['Sauna', 'Wellness', 'Massage', 'Spa']
-ZOOM_START = 11
+
 
 st.set_page_config(
     page_title="Urban Sports Club Search",
@@ -42,8 +40,18 @@ def verify_data(df):
 
 
 @st.cache_data
-def get_center_coords(df):
-    return df.latitude.mean(), df.longitude.mean()
+def get_center_coords_and_zoom(df):
+    if len(df) == 0:
+        # No venues selected
+        lat, lon =  [0, 0]
+        zoom = 5
+    else:
+        # Get location of city w/ most venues
+        city = df.city_name.value_counts().index[0]
+        subdf = df[df.city_name == city]
+        lat, lon = subdf.latitude.mean(), subdf.longitude.mean()
+        zoom = 11
+    return [lat, lon], zoom
 
 
 @st.cache_data
@@ -100,7 +108,7 @@ def render_sidebar(disciplines, cities, date):
     return select_cities, select_disciplines, select_plus, check_plans
 
 
-def render_map(df, location_coords):
+def render_map(df, location_coords, zoom):
     m = folium.Map(tiles="OpenStreetMap")
     for i, row in df.iterrows():
         if row.plus_options:
@@ -122,7 +130,7 @@ def render_map(df, location_coords):
         ).add_to(m)
 
     st_map = st_folium(m, height=400, use_container_width=True,
-                       zoom=ZOOM_START,
+                       zoom=zoom,
                        center=location_coords,
                        key='st_folium_map',
                        returned_objects=[])
@@ -166,8 +174,8 @@ def main():
 
     filtered_df = filter_df(df, select_disciplines, select_plus,
                             check_plans, select_cities)
-    center_coords = get_center_coords(filtered_df)
-    render_map(filtered_df, center_coords)
+    center_coords, zoom = get_center_coords_and_zoom(filtered_df)
+    render_map(filtered_df, center_coords, zoom)
     render_table(filtered_df)
 
 
