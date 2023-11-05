@@ -44,7 +44,7 @@ def get_center_coords_and_zoom(df):
     if len(df) == 0:
         # No venues selected
         lat, lon =  [0, 0]
-        zoom = 5
+        zoom = 2
     else:
         # Get location of city w/ most venues
         city = df.city_name.value_counts().index[0]
