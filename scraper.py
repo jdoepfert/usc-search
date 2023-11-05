@@ -172,11 +172,13 @@ def main():
     download_date = pd.Timestamp.today().date()
     cities = download_cities()
     for city_name, city_id in cities.items():
+        if "Castel" not in city_name: continue
         logger.info(f"Starting to scrape city {city_name}...")
         venues_source = download_venues_source(city_id)
         venues = extract_venues(venues_source)
-        venues_w_metadata = add_venue_metadata(venues, city_id)
-        store_csv(venues_w_metadata, download_date, city_id)
+        if not venues.empty:
+            venues_w_metadata = add_venue_metadata(venues, city_id)
+            store_csv(venues_w_metadata, download_date, city_id)
         logger.info(f"Scraping city {city_name} finished!")
 
 
