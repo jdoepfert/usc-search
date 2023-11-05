@@ -86,7 +86,7 @@ def render_sidebar(disciplines, cities, date):
     check_plans = []
     for i, p in enumerate(PLANS):
         with check_cols[i]:
-            check_plans.append(st.checkbox(p, p in PLANS[1:]))
+            check_plans.append(st.checkbox(p, p in PLANS[1:-1]))
 
     select_plus = st.sidebar.toggle('Plus Only')
 
