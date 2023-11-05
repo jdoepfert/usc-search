@@ -162,23 +162,26 @@ def add_venue_metadata(venues, city_id):
     return df
 
 
-def store_csv(df, date, city_id):
-    filename = f'venues_{date}_city{city_id}_maxpages{config.MAX_PAGES}.csv'
-    logger.info(f"Storing into {filename}")
-    df.to_csv(os.path.join(config.DATA_DIR, filename), index=False)
+def store_csv(df, filepath):
+    logger.info(f"Storing into {filepath}")
+    df.to_csv(filepath, index=False)
 
 
 def main():
     download_date = pd.Timestamp.today().date()
     cities = download_cities()
     for city_name, city_id in cities.items():
-        if "Castel" not in city_name: continue
+        filename = f'venues_{download_date}_city{city_id}_maxpages{config.MAX_PAGES}.csv'
+        filepath = os.path.join(config.DATA_DIR, filename)
+        if os.path.exists(filepath):
+            logger.info(f"csv file for {city_name} already exists, skipping...")
+            continue
         logger.info(f"Starting to scrape city {city_name}...")
         venues_source = download_venues_source(city_id)
         venues = extract_venues(venues_source)
         if not venues.empty:
             venues_w_metadata = add_venue_metadata(venues, city_id)
-            store_csv(venues_w_metadata, download_date, city_id)
+            store_csv(venues_w_metadata, filepath)
         logger.info(f"Scraping city {city_name} finished!")
 
 
