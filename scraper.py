@@ -65,9 +65,12 @@ def get_name(venue):
 
 def get_disciplines(venue):
     disciplines_divs = venue.find_all('div', class_=DISCIPLINE_CLASS)
-    assert len(disciplines_divs) == 1
-    disciplines_div = disciplines_divs[0]
-    disciplines = [d.strip() for d in disciplines_div.text.split('·')]
+    if len(disciplines_divs) == 0:
+        disciplines = ['Unknown']
+    else:
+        assert len(disciplines_divs) == 1
+        disciplines_div = disciplines_divs[0]
+        disciplines = [d.strip() for d in disciplines_div.text.split('·')]
     return disciplines
 
 
